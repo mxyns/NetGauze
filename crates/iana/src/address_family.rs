@@ -397,6 +397,7 @@ impl TryFrom<u8> for SubsequentAddressFamily {
 /// valid AFI/SAFI are used at compile time.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
+#[repr(C)]
 pub enum AddressType {
     Ipv4Unicast,
     Ipv4Multicast,

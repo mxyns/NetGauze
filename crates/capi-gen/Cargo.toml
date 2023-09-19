@@ -1,0 +1,18 @@
+[package]
+name = "capi-gen"
+version = "0.1.0"
+edition = "2021"
+authors = ["Maxence Younsi <mx.yns@outlook.fr>"]
+license = "MIT"
+description = """
+FFI C-API auto-generation
+"""
+keywords = ["ffi", "code_generation", "c", "api"]
+
+[dependencies]
+syn = { version = "2.0.33", features = ["full"] }
+cbindgen = "0.26.0"
+glob = "0.3.1"
+proc-macro2 = "1.0.67"
+capi-gen-macro = { path = "../capi-gen-macro" }
+paste = "1.0.14"

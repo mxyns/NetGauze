@@ -20,6 +20,7 @@ use crate::iana::BgpCapabilityCode;
 use netgauze_iana::address_family::{AddressFamily, AddressType};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, FromRepr};
+use capi_gen::capi_impl;
 
 /// Enhanced route refresh have fixed length as per RFC2918
 pub(crate) const ROUTE_REFRESH_CAPABILITY_LENGTH: u8 = 0;
@@ -415,10 +416,12 @@ impl AddPathAddressFamily {
 /// +-----------------------------------------------------+
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[repr(C)]
 pub struct ExtendedNextHopEncodingCapability {
     encodings: Vec<ExtendedNextHopEncoding>,
 }
 
+#[capi_impl]
 impl ExtendedNextHopEncodingCapability {
     pub const fn new(encodings: Vec<ExtendedNextHopEncoding>) -> Self {
         Self { encodings }
@@ -441,6 +444,7 @@ impl ExtendedNextHopEncodingCapability {
 /// +-----------------------------------------------------+
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[repr(C)]
 pub struct ExtendedNextHopEncoding {
     address_type: AddressType,
     next_hop_afi: AddressFamily,

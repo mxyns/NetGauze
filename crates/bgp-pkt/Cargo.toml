@@ -13,6 +13,12 @@ BGP-4 Protocol representation and serde.
 keywords = ["bgp", "parser", "protocol"]
 categories = ["network-programming", "parsing"]
 
+build = "build.rs"
+
+[build-dependencies]
+cargo-c = "0.9.24"
+capi-gen = { path = "../capi-gen" }
+
 [dependencies]
 netgauze-iana = { version = "0.1.0", path = "../iana" }
 netgauze-locate = { version = "0.1.0", path = "../locate", optional = true }
@@ -26,12 +32,18 @@ nom = { workspace = true, optional = true }
 byteorder = { workspace = true, optional = true }
 criterion = { workspace = true, optional = true } # Dev dep for bench
 arbitrary = { workspace = true, optional = true }
+libc = { version = "0.2", optional = true }
+bytes = { version = "1.5.0", features = [] }
+paste = "1.0.14"
+syn = "2.0.33"
+capi-gen = { path = "../capi-gen" }
 
 [features]
 default = ["serde"]
 serde = ["nom", "byteorder", "netgauze-locate", "netgauze-parse-utils", "netgauze-serde-macros"]
 bench = ["criterion"]
 fuzz = ["arbitrary"]
+capi = ["libc"]
 
 
 [dev-dependencies]

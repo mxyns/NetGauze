@@ -1,0 +1,16 @@
+[package]
+name = "capi-gen-macro"
+version = "0.1.0"
+edition = "2021"
+authors = ["Maxence Younsi <mx.yns@outlook.fr>"]
+license = "MIT"
+description = """
+FFI C-API auto-generation
+"""
+keywords = ["ffi", "code_generation", "c", "api"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.67"

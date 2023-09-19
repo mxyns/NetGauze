@@ -1,5 +1,4 @@
 [workspace]
-
 members = [
     "crates/pcap-reader",
     "crates/bgp-pkt",
@@ -12,6 +11,8 @@ members = [
     "crates/locate",
     "crates/parse-utils",
     "crates/serde-macros",
+    "crates/capi-gen",
+    "crates/capi-gen-macro",
     "fuzz"
 ]
 resolver = "2"

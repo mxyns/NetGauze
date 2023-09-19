@@ -21,6 +21,13 @@ use crate::{
 };
 use ::serde::{Deserialize, Serialize};
 
+#[cfg(feature = "capi")]
+pub mod capi;
+
+#[cfg(feature = "capi")]
+mod capi_autogen;
+
+
 pub mod capabilities;
 pub mod community;
 pub mod iana;
