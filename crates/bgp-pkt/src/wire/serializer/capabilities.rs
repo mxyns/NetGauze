@@ -287,7 +287,7 @@ impl WritablePdu<ExtendedNextHopEncodingCapabilityWritingError>
         writer: &mut T,
     ) -> Result<(), ExtendedNextHopEncodingCapabilityWritingError> {
         writer.write_u8(self.len() as u8 - 1)?;
-        for encoding in self.encodings() {
+        for encoding in self.encodings().clone().into_iter() {
             encoding.write(writer)?;
         }
         Ok(())

@@ -21,6 +21,7 @@ use netgauze_iana::address_family::{AddressFamily, AddressType};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, FromRepr};
 use capi_gen::capi_impl;
+use capi_gen::owned_slice::OwnedSlice;
 
 /// Enhanced route refresh have fixed length as per RFC2918
 pub(crate) const ROUTE_REFRESH_CAPABILITY_LENGTH: u8 = 0;
@@ -418,16 +419,16 @@ impl AddPathAddressFamily {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ExtendedNextHopEncodingCapability {
-    encodings: Vec<ExtendedNextHopEncoding>,
+    encodings: OwnedSlice<ExtendedNextHopEncoding>,
 }
 
-#[capi_impl]
+
 impl ExtendedNextHopEncodingCapability {
-    pub const fn new(encodings: Vec<ExtendedNextHopEncoding>) -> Self {
+    pub const fn new(encodings: OwnedSlice<ExtendedNextHopEncoding>) -> Self {
         Self { encodings }
     }
 
-    pub const fn encodings(&self) -> &Vec<ExtendedNextHopEncoding> {
+    pub const fn encodings(&self) -> &OwnedSlice<ExtendedNextHopEncoding> {
         &self.encodings
     }
 }
@@ -450,6 +451,7 @@ pub struct ExtendedNextHopEncoding {
     next_hop_afi: AddressFamily,
 }
 
+#[capi_impl]
 impl ExtendedNextHopEncoding {
     pub const fn new(address_type: AddressType, next_hop_afi: AddressFamily) -> Self {
         Self {

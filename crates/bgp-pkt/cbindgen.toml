@@ -4,7 +4,7 @@ no_includes = true
 include_guard = "NETGAUZE_BGP_PKT"
 tab_width = 4
 style = "Type"
-language = "C"
+language = "C++"
 
 [parse]
 parse_deps = false
@@ -12,9 +12,6 @@ parse_deps = false
 [parse.expand]
 crates = ["netgauze-bgp-pkt"]
 features = ["capi"]
-
-[export]
-include = ["BgpMessage::get_type"]
 
 [struct]
 # generates operator==

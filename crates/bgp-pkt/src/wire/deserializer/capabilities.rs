@@ -31,6 +31,7 @@ use nom::{
     IResult,
 };
 use serde::{Deserialize, Serialize};
+use capi_gen::owned_slice::OwnedSlice;
 
 use netgauze_serde_macros::LocatedError;
 
@@ -447,7 +448,7 @@ impl<'a> ReadablePdu<'a, LocatedExtendedNextHopEncodingCapabilityParsingError<'a
         let (buf, encodings_buf) = nom::multi::length_data(be_u8)(buf)?;
         let (_, encodings) = parse_till_empty(encodings_buf)?;
 
-        Ok((buf, ExtendedNextHopEncodingCapability::new(encodings)))
+        Ok((buf, ExtendedNextHopEncodingCapability::new(OwnedSlice::<ExtendedNextHopEncoding>::from(encodings))))
     }
 }
 

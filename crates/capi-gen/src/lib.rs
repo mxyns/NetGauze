@@ -1,4 +1,5 @@
 mod capi_gen;
+pub mod owned_slice;
 
 pub use capi_gen_macro::capi_impl;
 pub use capi_gen::*;

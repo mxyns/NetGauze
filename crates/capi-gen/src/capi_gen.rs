@@ -1,9 +1,11 @@
 use std::error::Error;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io;
+use std::io::{BufWriter, Read, Write};
+use std::process::{Command, Stdio};
 use proc_macro2::{Span, TokenStream};
 use syn;
-use syn::{AttrStyle, FnArg, Generics, ImplItem, ImplItemFn, Item, ItemImpl, Pat, PatIdent, PatType, ReturnType, Type, TypePtr, Visibility};
+use syn::{AttrStyle, FnArg, Generics, ImplItem, ImplItemFn, Item, ItemImpl, Pat, Path, PatIdent, PatType, ReturnType, Type, TypePtr, Visibility};
 use syn::__private::quote::{format_ident, quote};
 use syn::__private::ToTokens;
 use syn::punctuated::Punctuated;
@@ -71,7 +73,11 @@ fn extract_marked_items(ast: syn::File) -> Vec<Item> {
 fn process_items(items: Vec<Item>) -> TokenStream {
     let mut auto_gen = quote! {
         // automatically generated c-api using capi-gen
+        #[allow(unused_imports)]
         use capi_gen;
+        use capi_gen::owned_slice::OwnedSlice;
+        use netgauze_iana::address_family::AddressFamily;
+        use netgauze_iana::address_family::AddressType;
         use crate::capabilities::{ExtendedNextHopEncoding, ExtendedNextHopEncodingCapability};
     };
 
@@ -113,33 +119,42 @@ fn process_impl(impl_: ItemImpl) -> TokenStream {
     impl_quote
 }
 
-fn process_function(impl_receiver: Box<Type>, function: ImplItemFn) -> Option<TokenStream> {
-    None
+fn impl_item_fn_supported(function: &ImplItemFn) -> bool {
+    if !matches!(function.vis, Visibility::Public(_))
+        || function.defaultness.is_some()
+        || function.sig.abi.is_some()
+        || has_generics(&function.sig.generics)
+        || function.sig.asyncness.is_some()
+        || function.sig.variadic.is_some()
+    {
+        println!("skipped function has unsupported qualifiers");
+        false
+    } else {
+        true
+    }
 }
 
-fn process_method(impl_receiver: Box<Type>, method: ImplItemFn) -> Option<TokenStream> {
-    if !matches!(method.vis, Visibility::Public(_))
-        || method.defaultness.is_some()
-        || method.sig.abi.is_some()
-        || has_generics(&method.sig.generics)
-        || method.sig.asyncness.is_some()
-        || method.sig.variadic.is_some()
-    {
-        println!("skipped method has unsupported qualifiers");
+/// process a function into a wrapper
+fn process_function(impl_receiver: Box<Type>, function: ImplItemFn) -> Option<TokenStream> {
+    if !impl_item_fn_supported(&function) {
         return None;
     }
 
-    let method_name = &method.sig.ident;
-    let unsafety = &method.sig.unsafety;
-    let function_inputs = &method.sig.inputs;
-    let (new_function_inputs, ptr_imports) = clean_function_inputs(impl_receiver.clone(), function_inputs); // unself_inputs(impl_receiver.clone(), &method.sig.inputs);
-    let new_method_inputs = clean_method_inputs(function_inputs); // unself_inputs(impl_receiver.clone(), &method.sig.inputs);
-    let function_output = clean_function_output(&method.sig.output);
+    let method_name = &function.sig.ident;
+    let unsafety = &function.sig.unsafety;
+    let function_inputs = &function.sig.inputs;
+    let (new_function_inputs, ptr_imports) = clean_function_inputs(impl_receiver.clone(), function_inputs);
+    let new_method_inputs = clean_method_inputs(function_inputs);
+    let function_output = clean_function_output(&function.sig.output, impl_receiver.clone());
 
     let function_name = format_ident!("{}_{}", format!("{}", impl_receiver.as_ref().to_token_stream()), method_name);
 
     Some(
         quote! {
+
+
+
+            #[allow(unused_braces)]
             #[no_mangle]
             pub #unsafety extern "C" fn #function_name ( #new_function_inputs ) #function_output {
 
@@ -151,14 +166,79 @@ fn process_method(impl_receiver: Box<Type>, method: ImplItemFn) -> Option<TokenS
     )
 }
 
+/// process a method into a function wrapper
+fn process_method(impl_receiver: Box<Type>, method: ImplItemFn) -> Option<TokenStream> {
+    if !impl_item_fn_supported(&method) {
+        return None;
+    }
+
+    let method_name = &method.sig.ident;
+    let unsafety = &method.sig.unsafety;
+    let function_inputs = &method.sig.inputs;
+    let (new_function_inputs, ptr_imports) = clean_function_inputs(impl_receiver.clone(), function_inputs);
+    let new_method_inputs = clean_method_inputs(function_inputs);
+    let function_output = clean_function_output(&method.sig.output, impl_receiver.clone());
+
+    let function_name = format_ident!("{}_{}", format!("{}", impl_receiver.as_ref().to_token_stream()), method_name);
+
+    Some(
+        quote! {
+
+
+
+            #[allow(unused_braces)]
+            #[no_mangle]
+            pub #unsafety extern "C" fn #function_name ( #new_function_inputs ) #function_output {
+
+                #ptr_imports
+
+                return #unsafety { #impl_receiver::#method_name ( #new_method_inputs ) }
+            }
+        }
+    )
+}
+
+/// generate a file based on the TokenStream content
 fn generate_file(auto_gen: TokenStream) -> String {
-    let mut text = String::from("// c-api automatically generated using capi-gen\n");
+    let mut text = String::from("// c-api automatically generated using capi-gen\n
+    ");
 
     text.push_str(auto_gen.to_string().as_str());
 
-    text
+    format_file(text)
 }
 
+fn format_file(content: String) -> String {
+    let rustfmt = which::which("rustfmt").unwrap();
+    let mut cmd = Command::new(&*rustfmt);
+
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
+
+    let mut child = cmd.spawn().unwrap();
+    let mut child_stdin = child.stdin.take().unwrap();
+    let mut child_stdout = child.stdout.take().unwrap();
+
+    // Write to stdin in a new thread, so that we can read from stdout on this
+    // thread. This keeps the child from blocking on writing to its stdout which
+    // might block us from writing to its stdin.
+    let stdin_handle = ::std::thread::spawn(move || {
+        let _ = child_stdin.write_all(content.as_bytes());
+        content
+    });
+
+    let mut output = vec![];
+    io::copy(&mut child_stdout, &mut output).unwrap();
+
+    let status = child.wait().unwrap();
+    let content = stdin_handle.join().expect(
+        "The thread writing to rustfmt's stdin doesn't do \
+             anything that could panic",
+    );
+
+    String::from_utf8(output).unwrap()
+}
+
+/// check if any generic is present
 fn has_generics(generics: &Generics) -> bool {
     generics.gt_token.is_some()
         || generics.lt_token.is_some()
@@ -166,6 +246,7 @@ fn has_generics(generics: &Generics) -> bool {
         || !generics.params.is_empty()
 }
 
+/// clean method inputs for use in the method call
 fn clean_method_inputs(inputs: &Punctuated<FnArg, Comma>) -> TokenStream {
     let mut new_inputs = None;
 
@@ -194,6 +275,8 @@ fn clean_method_inputs(inputs: &Punctuated<FnArg, Comma>) -> TokenStream {
     new_inputs.unwrap()
 }
 
+// TODO replace Self in other input types eg: Self::GAT
+/// clean method inputs for the function definition
 fn clean_function_inputs(impl_receiver: Box<Type>, inputs: &Punctuated<FnArg, Comma>) -> (Punctuated<FnArg, Comma>, TokenStream) {
     let mut result = Punctuated::<FnArg, Comma>::new();
     let mut pointer_imports = quote!();
@@ -258,22 +341,44 @@ fn import_pointer(typed: &PatType) -> TokenStream {
     }
 }
 
-fn clean_function_output(ret: &ReturnType) -> ReturnType {
+fn clean_function_output(ret: &ReturnType, impl_receiver: Box<Type>) -> ReturnType {
 
     match ret {
         ReturnType::Default => ret.clone(),
         ReturnType::Type(arrow, ty) => {
+            let ty = unself_type(ty.clone(), impl_receiver);
             let ty = if let Some(new_type) = pointerify_ref_only(ty.clone(), None) {
                 new_type
             } else {
                 ty.clone()
             };
 
-            // TODO cleanup any "self"
-
             ReturnType::Type(arrow.clone(), ty)
         }
     }
+}
+
+fn unself_type(ty: Box<Type>, original: Box<Type>) -> Box<Type> {
+
+    println!("{:?}", ty.as_ref().to_token_stream());
+    let ty = match ty.as_ref() {
+        Type::Path(path) => {
+            let path = if path.path.is_ident("Self") {
+                let mut path = path.clone();
+
+                path.path = syn::parse2(original.to_token_stream()).unwrap();
+
+                path
+            } else {
+                path.clone()
+            };
+
+            Box::new(Type::Path(path))
+        }
+        _ => ty
+    };
+
+    ty
 }
 
 fn pointerify_ref_only(ty: Box<Type>, replace_self: Option<Box<Type>>) -> Option<Box<Type>> {
