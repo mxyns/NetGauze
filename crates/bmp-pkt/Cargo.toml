@@ -13,6 +13,9 @@ BMP Protocol representation and serde.
 keywords = ["bmp", "bgp", "parser", "protocol"]
 categories = ["network-programming", "parsing"]
 
+[build-dependencies]
+cargo-c = "0.9.24"
+
 [dependencies]
 netgauze-iana = { version = "0.1.0", path = "../iana" }
 netgauze-bgp-pkt = { version = "0.1.0", path = "../bgp-pkt" }
@@ -29,12 +32,14 @@ criterion = { workspace = true, optional = true } # Dev dep for bench
 serde = { workspace = true, features = ["derive"] }
 arbitrary = { workspace = true, optional = true }
 arbitrary_ext = { workspace = true, optional = true }
+libc = { version = "0.2.148" }
 
 [features]
 default = ["serde"]
 serde = ["nom", "byteorder", "netgauze-locate", "netgauze-parse-utils", "netgauze-serde-macros"]
 bench = ["criterion"]
 fuzz = ["arbitrary", "arbitrary_ext"]
+capi = []
 
 [dev-dependencies]
 netgauze-parse-utils = { version = "0.1.0", path = "../parse-utils", features = ["test-helpers"] }
