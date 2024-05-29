@@ -15,6 +15,7 @@
 
 //! Serializer for BGP Path Attributes
 
+use crate::wire::serializer::path_attribute::bgp_sid::SegmentIdentifierWritingError;
 use crate::{
     iana::AigpAttributeType,
     nlri::*,
@@ -52,6 +53,7 @@ pub enum PathAttributeWritingError {
     BgpLsAttributeError(#[from] BgpLsAttributeWritingError),
     OnlyToCustomerError(#[from] OnlyToCustomerWritingError),
     AigpError(#[from] AigpWritingError),
+    SegmentIdentifierError(#[from] SegmentIdentifierWritingError),
     UnknownAttributeError(#[from] UnknownAttributeWritingError),
 }
 
@@ -79,6 +81,7 @@ impl WritablePdu<PathAttributeWritingError> for PathAttribute {
             PathAttributeValue::BgpLs(value) => value.len(self.extended_length()),
             PathAttributeValue::OnlyToCustomer(value) => value.len(self.extended_length()),
             PathAttributeValue::Aigp(value) => value.len(self.extended_length()),
+            PathAttributeValue::SegmentIdentifier(value) => value.len(self.extended_length()),
             PathAttributeValue::UnknownAttribute(value) => value.len(self.extended_length()) - 1,
         };
         Self::BASE_LENGTH + value_len
@@ -158,6 +161,9 @@ impl WritablePdu<PathAttributeWritingError> for PathAttribute {
                 value.write(writer, self.extended_length())?;
             }
             PathAttributeValue::Aigp(value) => {
+                value.write(writer, self.extended_length())?;
+            }
+            PathAttributeValue::SegmentIdentifier(value) => {
                 value.write(writer, self.extended_length())?;
             }
             PathAttributeValue::UnknownAttribute(value) => {

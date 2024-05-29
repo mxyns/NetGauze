@@ -18,6 +18,7 @@
 
 #[cfg(feature = "fuzz")]
 use crate::arbitrary_ip;
+use crate::path_attribute::SegmentIdentifier;
 use crate::{
     community::{Community, ExtendedCommunity, ExtendedCommunityIpv6, LargeCommunity},
     iana::PathAttributeType,
@@ -187,6 +188,7 @@ pub enum PathAttributeValue {
     OnlyToCustomer(OnlyToCustomer),
     /// Accumulated IGP metric attribute
     Aigp(Aigp),
+    SegmentIdentifier(SegmentIdentifier),
     UnknownAttribute(UnknownAttribute),
 }
 
@@ -212,6 +214,7 @@ impl PathAttributeValue {
             Self::BgpLs(_) => BgpLsAttribute::can_be_optional(),
             Self::OnlyToCustomer(_) => OnlyToCustomer::can_be_optional(),
             Self::Aigp(_) => Aigp::can_be_optional(),
+            Self::SegmentIdentifier(_) => SegmentIdentifier::can_be_optional(),
             Self::UnknownAttribute(_) => UnknownAttribute::can_be_partial(),
         }
     }
@@ -237,6 +240,7 @@ impl PathAttributeValue {
             Self::BgpLs(_) => BgpLsAttribute::can_be_transitive(),
             Self::OnlyToCustomer(_) => OnlyToCustomer::can_be_transitive(),
             Self::Aigp(_) => Aigp::can_be_transitive(),
+            Self::SegmentIdentifier(_) => SegmentIdentifier::can_be_transitive(),
             Self::UnknownAttribute(_) => UnknownAttribute::can_be_transitive(),
         }
     }
@@ -262,6 +266,7 @@ impl PathAttributeValue {
             Self::BgpLs(_) => BgpLsAttribute::can_be_partial(),
             Self::OnlyToCustomer(_) => OnlyToCustomer::can_be_partial(),
             Self::Aigp(_) => Aigp::can_be_partial(),
+            Self::SegmentIdentifier(_) => SegmentIdentifier::can_be_partial(),
             Self::UnknownAttribute(_) => UnknownAttribute::can_be_partial(),
         }
     }
@@ -293,6 +298,7 @@ impl PathAttributeValue {
             PathAttributeValue::BgpLs(_) => Ok(PathAttributeType::BgpLsAttribute),
             PathAttributeValue::OnlyToCustomer(_) => Ok(PathAttributeType::OnlyToCustomer),
             PathAttributeValue::Aigp(_) => Ok(PathAttributeType::AccumulatedIgp),
+            PathAttributeValue::SegmentIdentifier(_) => Ok(PathAttributeType::BgpPrefixSid),
             PathAttributeValue::UnknownAttribute(UnknownAttribute { code, .. }) => Err(*code),
         }
     }

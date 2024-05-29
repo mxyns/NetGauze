@@ -16,6 +16,7 @@
 
 //! Deserializer for BGP Path Attributes
 
+use crate::wire::deserializer::path_attribute::SegmentIdentifierParsingError;
 use crate::{
     iana::{
         AigpAttributeType, PathAttributeType, UndefinedAigpAttributeType,
@@ -105,6 +106,10 @@ pub enum PathAttributeParsingError {
     BgpLsError(
         #[from_located(module = "crate::wire::deserializer::path_attribute")]
         BgpLsAttributeParsingError,
+    ),
+    SegmentIdentifierParsingError(
+        #[from_located(module = "crate::wire::deserializer::path_attribute")]
+        SegmentIdentifierParsingError,
     ),
     UnknownAttributeError(#[from_located(module = "self")] UnknownAttributeParsingError),
     InvalidPathAttribute(InvalidPathAttribute, PathAttributeValue),
@@ -235,6 +240,11 @@ impl<'a> ReadablePduWithOneInput<'a, &mut BgpParsingContext, LocatedPathAttribut
             Ok(PathAttributeType::BgpLsAttribute) => {
                 let (buf, value) = parse_into_located_one_input(buf, extended_length)?;
                 let value = PathAttributeValue::BgpLs(value);
+                (buf, value)
+            }
+            Ok(PathAttributeType::BgpPrefixSid) => {
+                let (buf, value) = parse_into_located_one_input(buf, extended_length)?;
+                let value = PathAttributeValue::SegmentIdentifier(value);
                 (buf, value)
             }
             Ok(_code) => {
