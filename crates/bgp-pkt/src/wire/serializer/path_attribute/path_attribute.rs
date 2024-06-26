@@ -81,7 +81,7 @@ impl WritablePdu<PathAttributeWritingError> for PathAttribute {
             PathAttributeValue::BgpLs(value) => value.len(self.extended_length()),
             PathAttributeValue::OnlyToCustomer(value) => value.len(self.extended_length()),
             PathAttributeValue::Aigp(value) => value.len(self.extended_length()),
-            PathAttributeValue::SegmentIdentifier(value) => value.len(self.extended_length()),
+            PathAttributeValue::PrefixSegmentIdentifier(value) => value.len(self.extended_length()),
             PathAttributeValue::UnknownAttribute(value) => value.len(self.extended_length()) - 1,
         };
         Self::BASE_LENGTH + value_len
@@ -163,7 +163,7 @@ impl WritablePdu<PathAttributeWritingError> for PathAttribute {
             PathAttributeValue::Aigp(value) => {
                 value.write(writer, self.extended_length())?;
             }
-            PathAttributeValue::SegmentIdentifier(value) => {
+            PathAttributeValue::PrefixSegmentIdentifier(value) => {
                 value.write(writer, self.extended_length())?;
             }
             PathAttributeValue::UnknownAttribute(value) => {

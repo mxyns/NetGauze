@@ -365,11 +365,11 @@ impl SRv6ServiceSubSubTlv {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
-pub struct SegmentIdentifier {
+pub struct PrefixSegmentIdentifier {
     pub tlvs: Vec<BgpSidAttribute>,
 }
 
-impl PathAttributeValueProperties for SegmentIdentifier {
+impl PathAttributeValueProperties for PrefixSegmentIdentifier {
     fn can_be_optional() -> Option<bool> {
         Some(true)
     }

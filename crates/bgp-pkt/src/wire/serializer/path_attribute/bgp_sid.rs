@@ -6,7 +6,7 @@ use netgauze_parse_utils::{WritablePdu, WritablePduWithOneInput};
 use netgauze_serde_macros::WritingError;
 
 use crate::path_attribute::{
-    BgpSidAttribute, SRv6ServiceSubSubTlv, SRv6ServiceSubTlv, SegmentIdentifier, SRGB,
+    BgpSidAttribute, PrefixSegmentIdentifier, SRv6ServiceSubSubTlv, SRv6ServiceSubTlv, SRGB,
 };
 use crate::wire::serializer::nlri::MplsLabelWritingError;
 use crate::wire::serializer::path_attribute::write_length;
@@ -18,7 +18,7 @@ pub enum SegmentIdentifierWritingError {
     BgpSidAttributeWritingError(#[from] BgpSidAttributeWritingError),
 }
 
-impl WritablePduWithOneInput<bool, SegmentIdentifierWritingError> for SegmentIdentifier {
+impl WritablePduWithOneInput<bool, SegmentIdentifierWritingError> for PrefixSegmentIdentifier {
     // One is extended length is not enabled, the rest is variable
     const BASE_LENGTH: usize = 1;
 
