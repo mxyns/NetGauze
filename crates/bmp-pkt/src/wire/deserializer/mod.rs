@@ -15,6 +15,9 @@
 
 //! Deserializer library for BMP's wire protocol
 
+mod version4;
+
+use crate::wire::deserializer::version4::LocatedBmpV4MessageValueParsingError;
 use chrono::LocalResult;
 #[cfg(not(feature = "fuzz"))]
 use chrono::TimeZone;
@@ -40,6 +43,7 @@ use netgauze_parse_utils::{
 };
 use netgauze_serde_macros::LocatedError;
 
+use crate::wire::deserializer::version4::BmpV4MessageValueParsingError;
 use crate::{iana::*, *};
 
 #[derive(LocatedError, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -49,6 +53,7 @@ pub enum BmpMessageParsingError {
     UndefinedBmpVersion(#[from_external] UndefinedBmpVersion),
     InvalidBmpLength(u32),
     BmpMessageValueError(#[from_located(module = "self")] BmpMessageValueParsingError),
+    BmpV4MessageValueError(#[from_located(module = "self")] BmpV4MessageValueParsingError),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -117,6 +122,10 @@ impl<'a> ReadablePduWithOneInput<'a, &mut BmpParsingContext, LocatedBmpMessagePa
             BmpVersion::Version3 => {
                 let (buf, value) = parse_into_located_one_input(buf, ctx)?;
                 (buf, BmpMessage::V3(value))
+            }
+            BmpVersion::Version4 => {
+                let (buf, value) = parse_into_located_one_input(buf, ctx)?;
+                (buf, BmpMessage::V4(value))
             }
         };
         // Make sure bmp message is fully parsed according to it's length
@@ -246,57 +255,57 @@ impl<'a> ReadablePdu<'a, LocatedInitiationInformationParsingError<'a>> for Initi
         let (buf, tlv_type) =
             nom::combinator::map_res(be_u16, InitiationInformationTlvType::try_from)(buf)?;
         let (buf, length) = be_u16(buf)?;
-        let (reminder, buf) = nom::bytes::complete::take(length)(buf)?;
+        let (remainder, buf) = nom::bytes::complete::take(length)(buf)?;
         match tlv_type {
             InitiationInformationTlvType::String => {
                 let (_, str) =
                     nom::combinator::map_res(nom::bytes::complete::take(length), |x: Span<'_>| {
                         String::from_utf8(x.to_vec())
                     })(buf)?;
-                Ok((reminder, InitiationInformation::String(str)))
+                Ok((remainder, InitiationInformation::String(str)))
             }
             InitiationInformationTlvType::SystemDescription => {
                 let (_, str) =
                     nom::combinator::map_res(nom::bytes::complete::take(length), |x: Span<'_>| {
                         String::from_utf8(x.to_vec())
                     })(buf)?;
-                Ok((reminder, InitiationInformation::SystemDescription(str)))
+                Ok((remainder, InitiationInformation::SystemDescription(str)))
             }
             InitiationInformationTlvType::SystemName => {
                 let (_, str) =
                     nom::combinator::map_res(nom::bytes::complete::take(length), |x: Span<'_>| {
                         String::from_utf8(x.to_vec())
                     })(buf)?;
-                Ok((reminder, InitiationInformation::SystemName(str)))
+                Ok((remainder, InitiationInformation::SystemName(str)))
             }
             InitiationInformationTlvType::VrfTableName => {
                 let (_, str) =
                     nom::combinator::map_res(nom::bytes::complete::take(length), |x: Span<'_>| {
                         String::from_utf8(x.to_vec())
                     })(buf)?;
-                Ok((reminder, InitiationInformation::VrfTableName(str)))
+                Ok((remainder, InitiationInformation::VrfTableName(str)))
             }
             InitiationInformationTlvType::AdminLabel => {
                 let (_, str) =
                     nom::combinator::map_res(nom::bytes::complete::take(length), |x: Span<'_>| {
                         String::from_utf8(x.to_vec())
                     })(buf)?;
-                Ok((reminder, InitiationInformation::AdminLabel(str)))
+                Ok((remainder, InitiationInformation::AdminLabel(str)))
             }
             InitiationInformationTlvType::Experimental65531 => Ok((
-                reminder,
+                remainder,
                 InitiationInformation::Experimental65531(buf.to_vec()),
             )),
             InitiationInformationTlvType::Experimental65532 => Ok((
-                reminder,
+                remainder,
                 InitiationInformation::Experimental65532(buf.to_vec()),
             )),
             InitiationInformationTlvType::Experimental65533 => Ok((
-                reminder,
+                remainder,
                 InitiationInformation::Experimental65533(buf.to_vec()),
             )),
             InitiationInformationTlvType::Experimental65534 => Ok((
-                reminder,
+                remainder,
                 InitiationInformation::Experimental65534(buf.to_vec()),
             )),
         }
