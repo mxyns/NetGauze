@@ -6,11 +6,10 @@ use crate::version4::{
     UnknownBmpStatelessParsingCapability,
 };
 use crate::wire::deserializer::*;
-use crate::{PeerHeader, PeerKey, RouteMonitoringMessageError};
+use crate::{PeerHeader, PeerKey};
 use netgauze_bgp_pkt::wire::deserializer::{read_tlv_header_t16_l16, BgpMessageParsingError};
-use netgauze_bgp_pkt::BgpMessage;
 use netgauze_parse_utils::{
-    parse_into_located, parse_into_located_one_input, parse_till_empty_into_with_one_input_located,
+    parse_into_located, parse_into_located_one_input,
     ReadablePduWithOneInput, Span,
 };
 use netgauze_serde_macros::LocatedError;
@@ -18,7 +17,6 @@ use nom::error::ErrorKind;
 use nom::number::complete::be_u8;
 use nom::IResult;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
 
 #[derive(LocatedError, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum BmpV4MessageValueParsingError {
@@ -132,7 +130,7 @@ impl<'a>
             let mut buf = buf;
             let mut ret = Vec::new();
             while !buf.is_empty() {
-                let (tmp, element) = parse_into_located_one_input(buf, bgp_ctx)?;
+                let (tmp, element) = parse_into_located_one_input(buf, &mut *bgp_ctx)?;
                 ret.push(element);
                 buf = tmp;
             }
@@ -273,15 +271,23 @@ impl<'a>
         let (buf, capability) =
             nom::combinator::map_res(be_u16, BmpStatelessParsingCapability::try_from)(buf)?;
         let (buf, enabled) = be_u8(buf)?;
-        // TODO set ctx
-        // FIXME what do we do when we get the stateless parsing after the PDU ?
+        let enabled = enabled == 1;
+
+        match capability {
+            BmpStatelessParsingCapability::AddPath => {
+                ctx.add_path_mut().insert(address_type, enabled);
+            }
+            BmpStatelessParsingCapability::MultipleLabels => {
+                ctx.multiple_labels_mut().insert(address_type, enabled.then(|| u8::MAX).unwrap_or(0));
+            }
+        }
 
         Ok((
             buf,
             StatelessParsingTlv {
                 address_type,
                 capability,
-                enabled: enabled == 1,
+                enabled,
             },
         ))
     }

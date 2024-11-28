@@ -15,11 +15,7 @@
 
 //! Codecs to decode and encode BMP Protocol messages from byte streams
 
-use crate::{
-    iana::BmpVersion,
-    wire::{deserializer::BmpMessageParsingError, serializer::BmpMessageWritingError},
-    BmpMessage, BmpMessageValue, PeerKey,
-};
+use crate::{iana::BmpVersion, wire::{deserializer::BmpMessageParsingError, serializer::BmpMessageWritingError}, BmpMessage, BmpMessageValue, PeerKey, PeerUpNotificationMessage};
 use byteorder::{ByteOrder, NetworkEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use netgauze_bgp_pkt::{capabilities::BgpCapability, BgpMessage};
@@ -30,6 +26,7 @@ use netgauze_parse_utils::{LocatedParsingError, ReadablePduWithOneInput, Span, W
 use nom::Needed;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
+use crate::version4::BmpV4MessageValue;
 
 /// Min length for a valid BMP Message: 1-octet version + 4-octet length
 pub const BMP_MESSAGE_MIN_LENGTH: usize = 5;
@@ -95,6 +92,61 @@ impl BmpParsingContext {
     /// of BMP message. It updates BGP parsing flags such as: Add Path and
     /// Multi label MPLS capabilities
     pub fn update(&mut self, msg: &BmpMessage) {
+        fn handle_peer_up(ctx: &mut BmpParsingContext, peer_up: &PeerUpNotificationMessage) {
+            if let BgpMessage::Open(open) = peer_up.sent_message() {
+                let capabilities = open.capabilities();
+                let (add_path_caps, multiple_labels_caps) = get_caps(capabilities);
+                let peer_key = PeerKey::from_peer_header(peer_up.peer_header());
+                let bgp_ctx = ctx.entry(peer_key).or_default();
+                bgp_ctx.add_path_mut().clear();
+                bgp_ctx.multiple_labels_mut().clear();
+                for add_path in add_path_caps {
+                    for add_path_family in add_path.address_families() {
+                        bgp_ctx.add_path_mut().insert(
+                            add_path_family.address_type(),
+                            add_path_family.receive(),
+                        );
+                    }
+                }
+                for labels in multiple_labels_caps {
+                    for label in labels {
+                        bgp_ctx
+                            .multiple_labels_mut()
+                            .insert(label.address_type(), label.count());
+                    }
+                }
+            }
+            if let BgpMessage::Open(open) = peer_up.received_message() {
+                let capabilities = open.capabilities();
+                let (add_path_caps, multiple_labels_caps) = get_caps(capabilities);
+                let peer_key = PeerKey::new(
+                    peer_up.peer_header().address(),
+                    peer_up.peer_header().peer_type(),
+                    peer_up.peer_header().rd(),
+                    peer_up.peer_header().peer_as(),
+                    open.bgp_id(),
+                );
+                let bgp_ctx = ctx.entry(peer_key).or_default();
+                bgp_ctx.add_path_mut().clear();
+                bgp_ctx.multiple_labels_mut().clear();
+                for add_path in add_path_caps {
+                    for add_path_family in add_path.address_families() {
+                        bgp_ctx.add_path_mut().insert(
+                            add_path_family.address_type(),
+                            add_path_family.receive(),
+                        );
+                    }
+                }
+                for multiple_labels in multiple_labels_caps {
+                    for label in multiple_labels {
+                        bgp_ctx
+                            .multiple_labels_mut()
+                            .insert(label.address_type(), label.count());
+                    }
+                }
+            }
+        }
+
         match msg {
             BmpMessage::V3(value) => match value {
                 BmpMessageValue::PeerDownNotification(peer_down) => {
@@ -105,61 +157,23 @@ impl BmpParsingContext {
                     self.clear();
                 }
                 BmpMessageValue::PeerUpNotification(peer_up) => {
-                    if let BgpMessage::Open(open) = peer_up.sent_message() {
-                        let capabilities = open.capabilities();
-                        let (add_path_caps, multiple_labels_caps) = get_caps(capabilities);
-                        let peer_key = PeerKey::from_peer_header(peer_up.peer_header());
-                        let bgp_ctx = self.entry(peer_key).or_default();
-                        bgp_ctx.add_path_mut().clear();
-                        bgp_ctx.multiple_labels_mut().clear();
-                        for add_path in add_path_caps {
-                            for add_path_family in add_path.address_families() {
-                                bgp_ctx.add_path_mut().insert(
-                                    add_path_family.address_type(),
-                                    add_path_family.receive(),
-                                );
-                            }
-                        }
-                        for labels in multiple_labels_caps {
-                            for label in labels {
-                                bgp_ctx
-                                    .multiple_labels_mut()
-                                    .insert(label.address_type(), label.count());
-                            }
-                        }
-                    }
-                    if let BgpMessage::Open(open) = peer_up.received_message() {
-                        let capabilities = open.capabilities();
-                        let (add_path_caps, multiple_labels_caps) = get_caps(capabilities);
-                        let peer_key = PeerKey::new(
-                            peer_up.peer_header().address(),
-                            peer_up.peer_header().peer_type(),
-                            peer_up.peer_header().rd(),
-                            peer_up.peer_header().peer_as(),
-                            open.bgp_id(),
-                        );
-                        let bgp_ctx = self.entry(peer_key).or_default();
-                        bgp_ctx.add_path_mut().clear();
-                        bgp_ctx.multiple_labels_mut().clear();
-                        for add_path in add_path_caps {
-                            for add_path_family in add_path.address_families() {
-                                bgp_ctx.add_path_mut().insert(
-                                    add_path_family.address_type(),
-                                    add_path_family.receive(),
-                                );
-                            }
-                        }
-                        for multiple_labels in multiple_labels_caps {
-                            for label in multiple_labels {
-                                bgp_ctx
-                                    .multiple_labels_mut()
-                                    .insert(label.address_type(), label.count());
-                            }
-                        }
-                    }
+                    handle_peer_up(self, peer_up);
                 }
                 _ => {}
             },
+            BmpMessage::V4(value) => match value {
+                BmpV4MessageValue::PeerDownNotification(peer_down) => {
+                    let peer_key = PeerKey::from_peer_header(peer_down.peer_header());
+                    self.remove(&peer_key);
+                }
+                BmpV4MessageValue::PeerUpNotification(peer_up) => {
+                    handle_peer_up(self, peer_up)
+                }
+                BmpV4MessageValue::Termination(_) => {
+                    self.clear();
+                }
+                _ => {}
+            }
         };
     }
 }

@@ -5,7 +5,7 @@ use crate::version4::BmpV4RouteMonitoringMessageError::{
 use crate::version4::BmpV4RouteMonitoringTlvError::BadGroupTlvIndex;
 use crate::{
     InitiationMessage, PeerDownNotificationMessage, PeerHeader, PeerUpNotificationMessage,
-    RouteMirroringMessage, RouteMonitoringMessage, StatisticsReportMessage, TerminationMessage,
+    RouteMirroringMessage, StatisticsReportMessage, TerminationMessage,
 };
 use netgauze_bgp_pkt::iana::BgpMessageType;
 use netgauze_bgp_pkt::BgpMessage;
@@ -206,7 +206,7 @@ impl BmpV4RouteMonitoringMessage {
         &self.peer_header
     }
 
-    pub const fn update_message(&self) -> &BgpMessage {
+    pub fn update_message(&self) -> &BgpMessage {
         match &self.tlvs.iter().last().unwrap().value {
             BmpV4RouteMonitoringTlvValue::BgpUpdatePdu(update) => update,
             _ => panic!("the last tlv has to be bgp update"),
