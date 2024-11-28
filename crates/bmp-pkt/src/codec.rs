@@ -15,18 +15,22 @@
 
 //! Codecs to decode and encode BMP Protocol messages from byte streams
 
-use crate::{iana::BmpVersion, wire::{deserializer::BmpMessageParsingError, serializer::BmpMessageWritingError}, BmpMessage, BmpMessageValue, PeerKey, PeerUpNotificationMessage};
+use crate::{
+    iana::BmpVersion,
+    wire::{deserializer::BmpMessageParsingError, serializer::BmpMessageWritingError},
+    BmpMessage, BmpMessageValue, PeerKey, PeerUpNotificationMessage,
+};
 use byteorder::{ByteOrder, NetworkEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use netgauze_bgp_pkt::{capabilities::BgpCapability, BgpMessage};
 
+use crate::version4::BmpV4MessageValue;
 use crate::wire::deserializer::BmpParsingContext;
 use netgauze_bgp_pkt::capabilities::{AddPathCapability, MultipleLabel};
 use netgauze_parse_utils::{LocatedParsingError, ReadablePduWithOneInput, Span, WritablePdu};
 use nom::Needed;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
-use crate::version4::BmpV4MessageValue;
 
 /// Min length for a valid BMP Message: 1-octet version + 4-octet length
 pub const BMP_MESSAGE_MIN_LENGTH: usize = 5;
@@ -102,10 +106,9 @@ impl BmpParsingContext {
                 bgp_ctx.multiple_labels_mut().clear();
                 for add_path in add_path_caps {
                     for add_path_family in add_path.address_families() {
-                        bgp_ctx.add_path_mut().insert(
-                            add_path_family.address_type(),
-                            add_path_family.receive(),
-                        );
+                        bgp_ctx
+                            .add_path_mut()
+                            .insert(add_path_family.address_type(), add_path_family.receive());
                     }
                 }
                 for labels in multiple_labels_caps {
@@ -131,10 +134,9 @@ impl BmpParsingContext {
                 bgp_ctx.multiple_labels_mut().clear();
                 for add_path in add_path_caps {
                     for add_path_family in add_path.address_families() {
-                        bgp_ctx.add_path_mut().insert(
-                            add_path_family.address_type(),
-                            add_path_family.receive(),
-                        );
+                        bgp_ctx
+                            .add_path_mut()
+                            .insert(add_path_family.address_type(), add_path_family.receive());
                     }
                 }
                 for multiple_labels in multiple_labels_caps {
@@ -166,14 +168,12 @@ impl BmpParsingContext {
                     let peer_key = PeerKey::from_peer_header(peer_down.peer_header());
                     self.remove(&peer_key);
                 }
-                BmpV4MessageValue::PeerUpNotification(peer_up) => {
-                    handle_peer_up(self, peer_up)
-                }
+                BmpV4MessageValue::PeerUpNotification(peer_up) => handle_peer_up(self, peer_up),
                 BmpV4MessageValue::Termination(_) => {
                     self.clear();
                 }
                 _ => {}
-            }
+            },
         };
     }
 }
