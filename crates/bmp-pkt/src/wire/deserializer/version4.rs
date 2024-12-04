@@ -1,3 +1,4 @@
+use crate::version4::BmpV4PeerDownTlv;
 use crate::{
     iana::{BmpMessageType, UndefinedBmpMessageType},
     version4::{
@@ -9,7 +10,7 @@ use crate::{
     wire::deserializer::*,
     PeerHeader, PeerKey,
 };
-use netgauze_bgp_pkt::wire::deserializer::BgpMessageParsingError;
+use netgauze_bgp_pkt::wire::deserializer::{read_tlv_header_t16_l16, BgpMessageParsingError};
 use netgauze_parse_utils::{
     parse_into_located, parse_into_located_one_input, ReadablePduWithOneInput, Span,
 };
@@ -32,6 +33,7 @@ pub enum BmpV4MessageValueParsingError {
     PeerDownNotificationMessageError(
         #[from_located(module = "self")] PeerDownNotificationMessageParsingError,
     ),
+    PeerDownNotificationTlvError(#[from_located(module = "self")] BmpV4PeerDownTlvParsingError),
     RouteMirroringMessageError(#[from_located(module = "self")] RouteMirroringMessageParsingError),
     TerminationMessageError(#[from_located(module = "self")] TerminationMessageParsingError),
     StatisticsReportMessageError(
@@ -58,8 +60,12 @@ impl<'a>
                 (buf, BmpV4MessageValue::StatisticsReport(value))
             }
             BmpMessageType::PeerDownNotification => {
-                let (buf, value) = parse_into_located_one_input(buf, ctx)?;
-                (buf, BmpV4MessageValue::PeerDownNotification(value))
+                let (buf, v3_notif) = parse_into_located_one_input(buf, ctx)?;
+                let (buf, tlvs) = parse_till_empty_into_located(buf)?;
+                (
+                    buf,
+                    BmpV4MessageValue::PeerDownNotification { v3_notif, tlvs },
+                )
             }
             BmpMessageType::PeerUpNotification => {
                 let (buf, value) = parse_into_located_one_input(buf, ctx)?;
@@ -91,6 +97,29 @@ impl<'a>
             }
         };
         Ok((buf, msg))
+    }
+}
+
+#[derive(LocatedError, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum BmpV4PeerDownTlvParsingError {
+    #[serde(with = "ErrorKindSerdeDeref")]
+    NomError(#[from_nom] ErrorKind),
+}
+
+impl<'a> ReadablePdu<'a, LocatedBmpV4PeerDownTlvParsingError<'a>> for BmpV4PeerDownTlv {
+    fn from_wire(buf: Span<'a>) -> IResult<Span<'a>, Self, LocatedBmpV4PeerDownTlvParsingError<'a>>
+    where
+        Self: Sized,
+    {
+        let (tlv_type, _length, value, remainder) = read_tlv_header_t16_l16(buf)?;
+
+        Ok((
+            remainder,
+            Self::Unknown {
+                code: tlv_type,
+                value: value.to_vec(),
+            },
+        ))
     }
 }
 
