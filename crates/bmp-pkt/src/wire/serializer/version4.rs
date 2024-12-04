@@ -1,18 +1,20 @@
-use crate::version4::{
-    BmpV4MessageValue, BmpV4RouteMonitoringMessage, BmpV4RouteMonitoringTlv,
-    BmpV4RouteMonitoringTlvValue, StatelessParsingTlv,
-};
-use crate::wire::serializer::{
-    InitiationMessageWritingError, PeerDownNotificationMessageWritingError, PeerHeaderWritingError,
-    PeerUpNotificationMessageWritingError, RouteMirroringMessageWritingError,
-    StatisticsReportMessageWritingError, TerminationMessageWritingError,
+use crate::{
+    version4::{
+        BmpV4MessageValue, BmpV4RouteMonitoringMessage, BmpV4RouteMonitoringTlv,
+        BmpV4RouteMonitoringTlvValue, StatelessParsingTlv,
+    },
+    wire::serializer::{
+        InitiationMessageWritingError, PeerDownNotificationMessageWritingError,
+        PeerHeaderWritingError, PeerUpNotificationMessageWritingError,
+        RouteMirroringMessageWritingError, StatisticsReportMessageWritingError,
+        TerminationMessageWritingError,
+    },
 };
 use byteorder::{NetworkEndian, WriteBytesExt};
 use netgauze_bgp_pkt::wire::serializer::{write_tlv_header_t16_l16, BgpMessageWritingError};
 use netgauze_parse_utils::WritablePdu;
 use netgauze_serde_macros::WritingError;
-use std::convert::identity;
-use std::io::Write;
+use std::{convert::identity, io::Write};
 
 #[derive(WritingError, Eq, PartialEq, Clone, Debug)]
 pub enum BmpV4MessageValueWritingError {
@@ -77,7 +79,10 @@ impl WritablePdu<BmpV4RouteMonitoringMessageWritingError> for BmpV4RouteMonitori
     const BASE_LENGTH: usize = 0;
 
     fn len(&self) -> usize {
-        Self::BASE_LENGTH + self.peer_header.len() + self.update_message().len()
+        Self::BASE_LENGTH
+            + self.peer_header.len()
+            + self.update_message_tlv().len()
+            + self.tlvs().iter().map(|x| x.len()).sum::<usize>()
     }
 
     fn write<T: Write>(
@@ -88,6 +93,9 @@ impl WritablePdu<BmpV4RouteMonitoringMessageWritingError> for BmpV4RouteMonitori
         for tlv in self.tlvs() {
             tlv.write(writer)?;
         }
+
+        self.update_message_tlv().write(writer)?;
+
         Ok(())
     }
 }
@@ -102,7 +110,9 @@ impl WritablePdu<BmpV4RouteMonitoringTlvWritingError> for BmpV4RouteMonitoringTl
     const BASE_LENGTH: usize = 2 + 2 + 2; /* type + length + index */
 
     fn len(&self) -> usize {
-        Self::BASE_LENGTH + self.value().len()
+        let mut x = Self::BASE_LENGTH;
+        x += self.value().len();
+        x
     }
 
     fn write<T: Write>(&self, writer: &mut T) -> Result<(), BmpV4RouteMonitoringTlvWritingError>
@@ -134,8 +144,9 @@ impl WritablePdu<BmpV4RouteMonitoringTlvValueWritingError> for BmpV4RouteMonitor
         match self {
             BmpV4RouteMonitoringTlvValue::BgpUpdatePdu(update) => update.len(),
             BmpV4RouteMonitoringTlvValue::VrfTableName(str) => str.len(),
-            BmpV4RouteMonitoringTlvValue::GroupTlv(values) => values.len(),
-            BmpV4RouteMonitoringTlvValue::StatelessParsing { .. } => 2 + 2 + 1, /* afi + safi + bool */
+            BmpV4RouteMonitoringTlvValue::GroupTlv(values) => 2 * values.len(),
+            BmpV4RouteMonitoringTlvValue::StatelessParsing { .. } => 2 + 2 + 1, /* afi + safi +
+                                                                                  * bool */
             BmpV4RouteMonitoringTlvValue::Unknown { value, .. } => value.len(),
         }
     }

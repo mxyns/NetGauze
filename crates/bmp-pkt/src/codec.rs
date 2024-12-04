@@ -24,8 +24,7 @@ use byteorder::{ByteOrder, NetworkEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use netgauze_bgp_pkt::{capabilities::BgpCapability, BgpMessage};
 
-use crate::version4::BmpV4MessageValue;
-use crate::wire::deserializer::BmpParsingContext;
+use crate::{version4::BmpV4MessageValue, wire::deserializer::BmpParsingContext};
 use netgauze_bgp_pkt::capabilities::{AddPathCapability, MultipleLabel};
 use netgauze_parse_utils::{LocatedParsingError, ReadablePduWithOneInput, Span, WritablePdu};
 use nom::Needed;

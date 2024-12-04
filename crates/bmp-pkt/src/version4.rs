@@ -1,17 +1,13 @@
-use crate::iana::BmpMessageType;
-use crate::version4::BmpV4RouteMonitoringMessageError::{
-    BadBgpMessageType, MissingBgpUpdatePduTlv,
-};
-use crate::version4::BmpV4RouteMonitoringTlvError::{
-    BadGroupTlvIndex, VrfTableNameStringIsTooLong,
-};
 use crate::{
+    iana::BmpMessageType,
+    version4::BmpV4RouteMonitoringTlvError::{
+        BadBgpMessageType, BadGroupTlvIndex, VrfTableNameStringIsTooLong,
+    },
     InitiationMessage, PeerDownNotificationMessage, PeerHeader, PeerUpNotificationMessage,
     RouteMirroringMessage, StatisticsReportMessage, TerminationMessage,
 };
 use either::Either;
-use netgauze_bgp_pkt::iana::BgpMessageType;
-use netgauze_bgp_pkt::BgpMessage;
+use netgauze_bgp_pkt::{iana::BgpMessageType, BgpMessage};
 use netgauze_iana::address_family::AddressType;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, FromRepr};
@@ -21,7 +17,7 @@ use strum_macros::{Display, FromRepr};
 pub enum BmpV4MessageValue {
     RouteMonitoring(BmpV4RouteMonitoringMessage),
     StatisticsReport(StatisticsReportMessage),
-    PeerDownNotification(PeerDownNotificationMessage),
+    PeerDownNotification(PeerDownNotificationMessage), // TODO add tlv option
     PeerUpNotification(PeerUpNotificationMessage),
     Initiation(InitiationMessage),
     Termination(TerminationMessage),
@@ -61,6 +57,7 @@ pub struct BmpV4RouteMonitoringTlv {
 #[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub enum BmpV4RouteMonitoringTlvError {
     BadGroupTlvIndex(u16),
+    BadBgpMessageType(BgpMessageType),
     VrfTableNameStringIsTooLong(usize),
 }
 
@@ -80,6 +77,11 @@ impl BmpV4RouteMonitoringTlv {
                 let len = str.len();
                 if len > 255 {
                     return Err(VrfTableNameStringIsTooLong(len));
+                }
+            }
+            BmpV4RouteMonitoringTlvValue::BgpUpdatePdu(update_pdu) => {
+                if update_pdu.get_type() != BgpMessageType::Update {
+                    return Err(BadBgpMessageType(update_pdu.get_type()));
                 }
             }
             _ => {}
@@ -119,10 +121,10 @@ impl BmpV4RouteMonitoringTlv {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromRepr, Display)]
 #[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub enum BmpV4RouteMonitoringTlvType {
+    GroupTlv = 0,
+    StatelessParsing = 1,
+    BgpUpdatePdu = 2,
     VrfTableName = 3,
-    BgpUpdatePdu = 4,
-    GroupTlv = 5,
-    StatelessParsing = 6,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -166,6 +168,18 @@ impl TryFrom<u16> for BmpStatelessParsingCapability {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
+pub enum BmpV4RouteMonitoringError {
+    TlvError(BmpV4RouteMonitoringTlvError),
+}
+
+impl From<BmpV4RouteMonitoringTlvError> for BmpV4RouteMonitoringError {
+    fn from(value: BmpV4RouteMonitoringTlvError) -> Self {
+        Self::TlvError(value)
+    }
+}
+
 /// Route Monitoring messages are used for initial synchronization of the
 /// RIBs. They are also used for incremental updates of the RIB state.
 /// Route monitoring messages are state-compressed.
@@ -177,53 +191,42 @@ impl TryFrom<u16> for BmpStatelessParsingCapability {
 #[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
 pub struct BmpV4RouteMonitoringMessage {
     pub peer_header: PeerHeader,
+    update_pdu: BmpV4RouteMonitoringTlv,
     tlvs: Vec<BmpV4RouteMonitoringTlv>,
-}
-
-/// Runtime errors when constructing a [`RouteMonitoringMessage`]
-/// Peer Up BGP messages should only carry
-/// [`BgpMessage::Update`], anything else is an error
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "fuzz", derive(arbitrary::Arbitrary))]
-pub enum BmpV4RouteMonitoringMessageError {
-    MissingBgpUpdatePduTlv,
-    BadBgpMessageType(BgpMessageType),
 }
 
 impl BmpV4RouteMonitoringMessage {
     pub fn build(
         peer_header: PeerHeader,
+        update_pdu: BgpMessage,
         tlvs: Vec<BmpV4RouteMonitoringTlv>,
-    ) -> Result<Self, BmpV4RouteMonitoringMessageError> {
-        // Ensure we have at least one pdu tlv and it is an update
-        match tlvs.iter().find(|tlv| {
-            matches!(
-                tlv.get_type(),
-                Either::Left(BmpV4RouteMonitoringTlvType::BgpUpdatePdu)
-            )
-        }) {
-            None => return Err(MissingBgpUpdatePduTlv),
-            Some(BmpV4RouteMonitoringTlv {
-                index: _,
-                value: BmpV4RouteMonitoringTlvValue::BgpUpdatePdu(bgp_msg),
-            }) => match bgp_msg {
-                BgpMessage::Update(_) => {}
-                _ => return Err(BadBgpMessageType(bgp_msg.get_type())),
-            },
-            _ => unreachable!(),
-        };
+    ) -> Result<Self, BmpV4RouteMonitoringError> {
+        let update_pdu = BmpV4RouteMonitoringTlv::build(
+            0,
+            BmpV4RouteMonitoringTlvValue::BgpUpdatePdu(update_pdu),
+        )?;
 
-        Ok(Self { peer_header, tlvs })
+        Ok(Self {
+            peer_header,
+            update_pdu,
+            tlvs,
+        })
     }
 
     pub const fn peer_header(&self) -> &PeerHeader {
         &self.peer_header
     }
 
+    pub fn update_message_tlv(&self) -> &BmpV4RouteMonitoringTlv {
+        &self.update_pdu
+    }
+
     pub fn update_message(&self) -> &BgpMessage {
-        match &self.tlvs.iter().last().unwrap().value {
+        match &self.update_pdu.value {
             BmpV4RouteMonitoringTlvValue::BgpUpdatePdu(update) => update,
-            _ => panic!("the last tlv has to be bgp update"),
+            _ => {
+                unreachable!("This TLV has to be BgpUpdatePdu (enforced by builder)");
+            }
         }
     }
 

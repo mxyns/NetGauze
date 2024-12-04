@@ -17,8 +17,7 @@
 
 mod version4;
 
-use crate::wire::serializer::version4::BmpV4MessageValueWritingError;
-use crate::{iana::*, *};
+use crate::{iana::*, wire::serializer::version4::BmpV4MessageValueWritingError, *};
 use byteorder::{NetworkEndian, WriteBytesExt};
 use netgauze_bgp_pkt::wire::serializer::{
     nlri::RouteDistinguisherWritingError, BgpMessageWritingError,

@@ -43,8 +43,7 @@ use netgauze_parse_utils::{
 };
 use netgauze_serde_macros::LocatedError;
 
-use crate::wire::deserializer::version4::BmpV4MessageValueParsingError;
-use crate::{iana::*, *};
+use crate::{iana::*, wire::deserializer::version4::BmpV4MessageValueParsingError, *};
 
 #[derive(LocatedError, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum BmpMessageParsingError {
